@@ -51,7 +51,7 @@ def regex_to_postfix(regex: str):
     for c in regex:
 
         # operand
-        if c.isalnum():
+        if c.isalnum() or c == '_':
             result.append(c)
 
         # open parenthesis
@@ -152,7 +152,7 @@ def epsilonNFA_Builder(regex: str,token: str) -> NFA:
     }
     for c in postfix_regex:
 
-        if c.isalnum():
+        if c.isalnum() or c == '_':
             buffer.append(simpleNFA(c,token))
 
         elif c in unioperators.keys():

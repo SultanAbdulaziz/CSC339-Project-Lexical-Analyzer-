@@ -1,4 +1,5 @@
 from regex_to_NFA22 import NFA, accept_state, epsilonClosure,epsilonNFA_Builder
+from Main import *
 
 
 class DFAstate:
@@ -42,6 +43,13 @@ def test_DFA(start: DFAstate, tape: str):
         curr = curr.transitions[c]
     return curr.token if curr.token is not None else -1
 
-nfa = epsilonNFA_Builder("a*b*","IF_KW")
+def change(regex: str) -> str:
+    for key, val in bracket_map.items():
+        regex = regex.replace(f"[{key}]", val)
+    return regex
 
-print(test_DFA(NFA_to_DFA(nfa),"aaabbb"))
+h = "[A-Za-z][A-Za-z0-9_]*"
+
+nfa = epsilonNFA_Builder(change(h),"IF_KW")
+
+print(test_DFA(NFA_to_DFA(nfa),"HelloWorld"))

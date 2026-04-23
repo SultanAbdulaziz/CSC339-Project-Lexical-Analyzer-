@@ -1,4 +1,6 @@
-"""
+import sys
+
+sys.setrecursionlimit(300000)
 
 # represents the data of one state
 class State:
@@ -12,8 +14,7 @@ class State:
             self.transitions[char] = []
         self.transitions[char].append(target_state)
 
-
-class AcceptState(State):
+class accept_state(State):
     def __init__(self, token: str):
         super().__init__()
         self.token = token
@@ -21,7 +22,7 @@ class AcceptState(State):
 
 # represents the data of one NFA
 class NFA:
-    def __init__(self, start_state: State, accept_state: State):
+    def __init__(self, start_state: State, accept_state: accept_state):
         self.start_State = start_state
         self.accept_State = accept_state
 
@@ -75,20 +76,15 @@ def regex_to_postfix(regex: str):
 
     return "".join(result)
 
-
-def concat_NFAs(nfa1: NFA, nfa2: NFA):
-    nfa1.accept_State.add_transition('Ɛ', nfa2.start_State)
-    new_nfa = NFA(nfa1.start_State, nfa2.accept_State)
-    return new_nfa
-
-def concatNFAs(NFA1:NFA, NFA2:NFA):
+def concat_NFAs(NFA1:NFA, NFA2:NFA):
     #result NFA start state and accept state
     start_State = NFA1.start_State
     accept_State = NFA2.accept_State
     #add epsilon transition from NFA1 accept state to NFA2 start state
     NFA1.accept_State.__class__ = State
     del NFA1.accept_State.token
-    NFA1.accept_State.transitions["ε"] = NFA2.start_State
+    NFA1.accept_State.add_transition('Ɛ', NFA2.start_State)
+    return NFA(start_State,accept_State)
 
 
 def kleene_NFA(nfa: NFA):
@@ -112,14 +108,17 @@ def union_NFAs(nfa1: NFA, nfa2: NFA):
     new_start_State = State()
 
     # point to both start states of the two NFAs
-    new_start_State.add_transition('Ɛ', [nfa1.start_State, nfa2.start_State])
+    new_start_State.add_transition('Ɛ', nfa1.start_State)
+    new_start_State.add_transition('Ɛ', nfa2.start_State)
 
-    new_accept_State = State()
+
+    new_accept_State = accept_state(nfa1.accept_State.token)
 
     # combine the accept states of the two NFAs
-    nfa1.accept_State.add_transition('Ɛ', new_start_State)
+    nfa1.accept_State.add_transition('Ɛ', new_accept_State)
     nfa2.accept_State.add_transition('Ɛ', new_accept_State)
-
+    nfa1.accept_State.__class__ = State
+    nfa2.accept_State.__class__ = State
     new_nfa = NFA(new_start_State, new_accept_State)
     return new_nfa
 
@@ -133,13 +132,13 @@ def optionalNFA(nfa: NFA):
 
 
 def simpleNFA(c: chr, token: str):
-    start_State = State({})
-    accept_State = AcceptState(token)
+    start_State = State()
+    accept_State = accept_state(token)
     start_State.add_transition(c, accept_State)
     return NFA(start_State, accept_State)
 
 
-def epsilonNFA_Builder(regex: str,token: str):
+def epsilonNFA_Builder(regex: str,token: str) -> NFA:
     postfix_regex = regex_to_postfix(regex)
     buffer = []
     unioperators = {
@@ -148,7 +147,7 @@ def epsilonNFA_Builder(regex: str,token: str):
         "?": lambda x: optionalNFA(x),
     }
     bioperators = {
-        ".": lambda x, y: concatNFAs(x, y),
+        ".": lambda x, y: concat_NFAs(x, y),
         "|": lambda x, y: union_NFAs(x, y)
     }
     for c in postfix_regex:
@@ -170,41 +169,25 @@ def epsilonNFA_Builder(regex: str,token: str):
 
 def epsilonClosure(state: State) -> set[State]:
     closure = set()
-    deque: list[State] = state.transitions['Ɛ']
+    deque: list[State] = []
+    if 'Ɛ' in state.transitions.keys():
+        deque = list(state.transitions['Ɛ'])
 
     while deque:
-        item = deque.pop()
+        item = deque.pop(0)
         closure.add(item)
-        for value in item.transitions['Ɛ']:
-            if value not in closure:
-                deque.append(value)
+        if 'Ɛ' in item.transitions.keys():
+            for value in item.transitions['Ɛ']:
+                if value not in closure:
+                    deque.append(value)
 
     return closure
 
-def test_NFA(current_state: State, input_tape:str, current_index: int):
-    current_closure = epsilonClosure(current_state)
-    possible_transitions = current_state.transitions[input_tape[current_index]]
-
-    if type(current_state) is AcceptState:
-        return current_state.token
-
-    if not current_closure and not possible_transitions:
-        return None
-
-    for state in current_closure:
-        token_epsilon = test_NFA(state, input_tape, current_index)
-
-    for state in possible_transitions:
-        token_normal = test_NFA(state, input_tape, current_index + 1)
 
 
 
+nfa = epsilonNFA_Builder("a*b*","True")
+#print(test_NFA(nfa.start_State,"aaaaaabbbbbbbbbb"))
 
 
-
-nfa = epsilonNFA_Builder("ab","True")
-print(test_NFA(nfa,"ab"))
-
-
-print(regex_to_postfix("ab|bd|cd"))
-"""
+#print(regex_to_postfix("ab|bd|cd"))

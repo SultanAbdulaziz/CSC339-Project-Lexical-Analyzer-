@@ -1,3 +1,5 @@
+from linecache import cache
+
 
 # represents the data of one state
 class State:
@@ -10,6 +12,12 @@ class State:
         if char not in self.transitions:
             self.transitions[char] = []
         self.transitions[char].append(target_state)
+
+class accept_state(State):
+    def init(self, token: str):
+        super().init({})
+        self.token = token
+
 
 # represents the data of one NFA
 class NFA:
@@ -73,6 +81,15 @@ def concat_NFAs(nfa1: NFA, nfa2: NFA):
     new_nfa = NFA(nfa1.start_State, nfa2.accept_State)
     return new_nfa
 
+def concatNFAs(NFA1:NFA, NFA2:NFA):
+    #result NFA start state and accept state
+    start_State = NFA1.start_State
+    accept_State = NFA2.accept_State
+    #add epsilon transition from NFA1 accept state to NFA2 start state
+    NFA1.accept_State.__class__ = State
+    del NFA1.accept_State.token
+    NFA1.accept_State.transitions["ε"] = NFA2.start_State
+
 
 def kleene_NFA(nfa: NFA):
     # START state to the END state on epsilon
@@ -115,41 +132,77 @@ def optionalNFA(nfa: NFA):
     return new_nfa
 
 
-def simpleNFA(c: chr):
-    start_State = State()
-    accept_State = State()
-    start_State.transitions[f"{c}"] = accept_State
-    NFA(start_State, accept_State)
-    return NFA
+def simpleNFA(c: chr, token: str):
+    start_State = State({})
+    accept_State = accept_state(token)
+    start_State.add_transition(c, accept_State)
+    return NFA(start_State, accept_State)
 
 
-def epsilonNFA_Builder(regex: str):
+def epsilonNFA_Builder(regex: str,token: str):
     postfix_regex = regex_to_postfix(regex)
     buffer = []
-    uni_operators = {
+    unioperators = {
         "*": lambda x: kleene_NFA(x),
         "+": lambda x: closure_NFA(x),
         "?": lambda x: optionalNFA(x),
     }
-    bi_operators = {
-        ".": lambda x, y: concat_NFAs(x, y),
+    bioperators = {
+        ".": lambda x, y: concatNFAs(x, y),
         "|": lambda x, y: union_NFAs(x, y)
     }
     for c in postfix_regex:
 
         if c.isalnum():
-            buffer.append(simpleNFA(c))
+            buffer.append(simpleNFA(c,token))
 
-        elif c in uni_operators:
-            buffer[-1] = uni_operators[c](buffer[-1])
+        elif c in unioperators.keys():
+            buffer[-1] = unioperators[c](buffer[-1])
 
-        elif c in bi_operators:
-            nfa = bi_operators[c](buffer[-1], buffer[-2])
+        elif c in bioperators.keys():
+            nfa = bioperators[c](buffer[-2],buffer[-1])
             buffer.pop()
             buffer.pop()
             buffer.append(nfa)
 
     return buffer[0]
+
+
+def epsilonClosure(state: State) -> set[State]:
+    closure = set()
+    deque: list[State] = state.transitions['Ɛ']
+
+    while deque:
+        item = deque.pop()
+        closure.add(item)
+        for value in item.transitions['Ɛ']:
+            if value not in closure:
+                deque.append(value)
+
+    return closure
+
+def test_NFA(current_state: State, input_tape:str, current_index: int):
+    current_closure = epsilonClosure(current_state)
+    possible_transitions = current_state.transitions[input_tape[current_index]]
+
+    if type(current_state) is accept_state:
+        return current_state.token
+
+    if not current_closure and not possible_transitions:
+        return False
+
+    for state in current_closure:
+        test_NFA(state, input_tape, current_index)
+
+    for state in possible_transitions:
+        test_NFA(state, input_tape, current_index + 1)
+
+
+
+
+
+nfa = epsilonNFA_Builder("ab","True")
+print(test_NFA(nfa,"ab"))
 
 
 print(regex_to_postfix("ab|bd|cd"))

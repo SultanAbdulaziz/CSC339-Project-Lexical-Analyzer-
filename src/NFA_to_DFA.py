@@ -4,7 +4,7 @@ NFA_to_DFA.py - Subset Construction and DFA Simulation
 Converts combined epsilon-NFAs into Deterministic Finite Automata (DFAs)
 using the subset construction algorithm, while respecting token matching priority.
 """
-from regex_to_NFA22 import NFA, accept_state, State, epsilonClosure,epsilonNFA_Builder
+from regex_to_NFA import NFA, accept_state, State, epsilonClosure,epsilonNFA_Builder
 from Main import *
 
 

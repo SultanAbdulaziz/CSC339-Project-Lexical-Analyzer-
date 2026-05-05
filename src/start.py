@@ -13,8 +13,6 @@ token_list = []
 for token in token_dict.keys():
     token_list.append(token)
 
-
-
 while True:
     print("--------------------Lexical Analyzer--------------------\n")
     print("\t\t\tOptions"
@@ -46,9 +44,9 @@ while True:
                         print("invalid input")
             case 2:
                 print("Building Regex -> NFA -> DFA...")
+                dfa = regexes_parser(token_dict)
                 while True:
                     try:
-                        dfa = regexes_parser(token_dict)
                         input1:str = input("input tape (-1 to go back):")
                         if input1 == "-1": 
                             break

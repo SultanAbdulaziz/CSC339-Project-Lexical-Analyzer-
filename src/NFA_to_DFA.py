@@ -28,7 +28,7 @@ class DFA_Trap_State(DFA_State):
     def __init__(self, nfa_states):
         super().__init__(nfa_states)
 
-def NFA_to_DFA(nfa:NFA):
+def NFA_to_DFA(nfa:NFA,token_list:list[str]):
     #initialze DFA
     initial_state = DFA_State(frozenset(epsilonClosure(nfa.initial_State)))
     dfa = DFA(initial_state, set(), nfa.alphabet, {initial_state}) 
@@ -57,14 +57,18 @@ def NFA_to_DFA(nfa:NFA):
                 closure.update(epsilonClosure(state))
 
             flag = ""
-            token = ""
+            accept_states_tokens_in_closure:list[str] = []
             for state in closure:
                 if type(state) is accept_State:
                     flag = "accept"
-                    token = state.token
+                    accept_states_tokens_in_closure.append(state.token)
 
             if flag == "accept":
-                target_DFA_state = DFA_Accept_State(frozenset(closure),token)
+                #to match accept specefication in the input
+                for token in token_list:
+                    if token in accept_states_tokens_in_closure:
+                         target_DFA_state = DFA_Accept_State(frozenset(closure),token)
+                         break
             elif not closure:
                 target_DFA_state = DFA_Trap_State(frozenset(closure))
             else:
@@ -120,15 +124,9 @@ def regexes_parser(token_dict:dict):
     for token,regex in token_dict.items():
         if regex is None: continue
         nfa_list.append(NFA_Builder(expand_regex(regex),token))
-    return NFA_to_DFA(combine_NFAs(nfa_list))
 
+    token_list:list[str] = []
+    for token in token_dict.keys():
+        token_list.append(token)
 
-
-            
-
-                
-
-
-
-        
-
+    return NFA_to_DFA(combine_NFAs(nfa_list),token_list)

@@ -1,113 +1,134 @@
-"""
-NFA_to_DFA.py - Subset Construction and DFA Simulation
+from regex_to_NFA import NFA,State,accept_State,epsilonClosure,NFA_Builder,combine_NFAs
 
-Converts combined epsilon-NFAs into Deterministic Finite Automata (DFAs)
-using the subset construction algorithm, while respecting token matching priority.
-"""
-from regex_to_NFA import NFA, accept_state, State, epsilonClosure,epsilonNFA_Builder
-from Main import *
-
-
-class DFAstate:
-    """Represents a DFA state as a frozenset of NFA states."""
-    def __init__(self, nfa_states, token_list=None):
-        self.nfa_states = frozenset(nfa_states)
-        self.transitions: dict[str, 'DFAstate'] = {}
-
-        # Collect all accept states
-        accepts = [s for s in nfa_states if isinstance(s, accept_state)]
-
-        if not accepts:
-            self.token = None
-        elif token_list is not None:
-            # Highest priority (lowest index in the specification list)
-            self.token = min(accepts, key=lambda s: token_list.index(s.token)).token
-        else:
-            self.token = accepts[0].token
-
-def build_combined_NFA(token_regex: dict) -> tuple:
-    """Builds a combined NFA from all token specifications.
+class DFA:
+    """Represents an NFA with Formal description."""
+    def __init__(self, initial_State: DFA_State, accept_states: set[DFA_Accept_State],alphabet: set,Q: set[DFA_State|DFA_Accept_State|DFA_Trap_State]):
+        self.alphabet = alphabet
+        self.initial_State = initial_State
+        self.accept_States = accept_states
+        self.Q = Q
     
-    Args:
-        token_regex: Ordered dict of {token_name: regex_pattern}.
-    Returns:
-        (combined_nfa, token_list) where token_list is the priority-ordered token names.
-    """    
-    token_list = list(token_regex.keys())
-    
-    # Build individual NFAs
-    token_nfas = []
-    for token_name, regex in token_regex.items():
-        nfa = epsilonNFA_Builder(regex, token_name)
-        token_nfas.append(nfa)
-    
-    # Combine all
-    master_start = State()
-    for nfa in token_nfas:
-        master_start.add_transition('Ɛ', nfa.start_State)
-    
-    # The NFA constructor requires an accept state (maybe change it later),
-    # so we pass the first NFA's accept as a placeholder (the real accept states are all inside the individual NFAs)
-    combined_nfa = NFA(master_start, token_nfas[0].accept_State)
-    
-    return combined_nfa, token_list
+    def δ(self, state: DFA_State, char: str) -> DFA_State:
+        return state.transitions.get(char, DFA_Trap_State(frozenset()))
 
-def e_close(states):
-    """Computes the epsilon-closure for a collection of NFA states.
-    
-    Args:
-        states: An iterable of NFA State objects.
-    Returns:
-        A frozenset containing the original states and all states reachable 
-        via epsilon-transitions.
-    """
-    states = list(states)
-    result = set(states)
-    for s in states:
-        result |= epsilonClosure(s)
-    return frozenset(result)
+class DFA_State():
+    def __init__(self,nfa_states:frozenset):
+        self.nfa_states = nfa_states
+        self.transitions: dict[str, DFA_State] = {}
 
+    def add_transition(self, char, target_state):
+        self.transitions[char] = target_state
 
-def NFA_to_DFA(nfa: NFA, token_list=None):
-    """Converts an NFA to a DFA using subset construction.
-    
-    Args:
-        nfa: The NFA to convert (can be a combined master NFA).
-        token_list: Ordered list of token names for priority resolution.
-    Returns:
-        The DFA start state.
-    """
+class DFA_Accept_State(DFA_State):
+    def __init__(self, nfa_states,token:str):
+        super().__init__(nfa_states)
+        self.token = token
 
-    start = DFAstate(e_close([nfa.start_State]), token_list)
-    seen = {start.nfa_states: start}
-    queue = [start]
+class DFA_Trap_State(DFA_State):
+    def __init__(self, nfa_states):
+        super().__init__(nfa_states)
 
-    while queue:
-        curr = queue.pop(0)
-        symbols = {sym for s in curr.nfa_states for sym in s.transitions if sym != 'Ɛ'}
-        for sym in symbols:
-            next_states = e_close(t for s in curr.nfa_states if sym in s.transitions for t in s.transitions[sym])
-            if next_states not in seen:
-                seen[next_states] = DFAstate(next_states, token_list)
-                queue.append(seen[next_states])
-            curr.transitions[sym] = seen[next_states]
+def NFA_to_DFA(nfa:NFA):
+    #initialze DFA
+    initial_state = DFA_State(frozenset(epsilonClosure(nfa.initial_State)))
+    dfa = DFA(initial_state, set(), nfa.alphabet, {initial_state}) 
 
-    return start
+    #2 queues 1 for each set of states and 1 queue to represent each set as a single DFA state
+    frozen_queue:list[frozenset[State]] = [epsilonClosure(nfa.initial_State)]
+    DFA_states_queue:list[DFA_State] = [initial_state]
+    #this is for already proccessed set of states as a signle DFA state
+    seen:dict[frozenset, DFA_State] = {frozenset(epsilonClosure(nfa.initial_State)): initial_state}
+
+    #while theres new subsets
+    while frozen_queue:
+        #parallel queues
+        current_set_of_states = frozen_queue.pop(0)
+        current_DFA_state = DFA_states_queue.pop(0)
+        #iterate over each symbol in the alphabet
+        for symbol in nfa.alphabet:
+            result:set[State] = set()
+            #get the result subset by checking the transition on said symbol through each state in the source subset
+            for state in current_set_of_states:
+                result.update(nfa.δ(state,symbol))
 
 
-def test_DFA(start: DFAstate, tape: str):
-    """Simulates the DFA on an input string to test if the entire string matches a single token.
-    
-    Args:
-        start: The starting DFAstate of the combined DFA.
-        tape: The input string to parse.
-    Returns:
-        The matched token name if the entire string reaches an accepting state, 
-        otherwise -1.
-    """
-    curr = start
-    for c in tape:
-        if c not in curr.transitions:
-            return -1
-        curr = curr.transitions[c]
-    return curr.token if curr.token is not None else -1
+            closure:set[State] = set()
+            for state in result:
+                closure.update(epsilonClosure(state))
+
+            flag = ""
+            token = ""
+            for state in closure:
+                if type(state) is accept_State:
+                    flag = "accept"
+                    token = state.token
+
+            if flag == "accept":
+                target_DFA_state = DFA_Accept_State(frozenset(closure),token)
+            elif not closure:
+                target_DFA_state = DFA_Trap_State(frozenset(closure))
+            else:
+                target_DFA_state = DFA_State(frozenset(closure))
+            if frozenset(closure) not in seen:
+                seen[frozenset(closure)] = target_DFA_state
+                frozen_queue.append(frozenset(closure))
+                DFA_states_queue.append(target_DFA_state)
+                if flag == "accept":
+                    dfa.accept_States.add(target_DFA_state)
+                dfa.Q.add(target_DFA_state)
+
+            current_DFA_state.add_transition(symbol, seen[frozenset(closure)])
+
+    return dfa
+
+def simulate(input_tape:str,dfa:DFA):
+    current_state = dfa.initial_State
+    for symbol in input_tape:
+        current_state = dfa.δ(current_state,symbol)
+        if type(current_state) is DFA_Trap_State: return "rejected"
+    if type(current_state) is DFA_Accept_State:
+        return current_state.token
+    else:
+        return "rejected"
+
+
+sLetters = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",
+            "v", "w", "x", "y", "z"]
+bLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U",
+            "V", "W", "X", "Y", "Z"]
+digits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+operators = ["+", "-", "*", "/", "=", "<", ">", "!"]
+delimiters = ["(", ")", "{", "}", ";", ","]
+
+Sigma = sLetters + bLetters + digits + operators + delimiters + ["_", "."]
+
+bracket_map = {
+    "0-9": "(" + "|".join(digits) + ")",
+    "A-Z": "(" + "|".join(bLetters) + ")",
+    "a-z": "(" + "|".join(sLetters) + ")",
+    "A-Za-z0-9_": "(" + "|".join(sLetters + bLetters + digits + ['_']) + ")",
+    "A-Za-z": "(" + "|".join(sLetters + bLetters) + ")"
+}
+
+def expand_regex(regex: str):
+    for key, val in bracket_map.items():
+        regex = regex.replace(f"[{key}]", val)
+    return regex
+
+def regexes_parser(token_dict:dict):
+    nfa_list:list[NFA] = []
+    for token,regex in token_dict.items():
+        if regex is None: continue
+        nfa_list.append(NFA_Builder(expand_regex(regex),token))
+    return NFA_to_DFA(combine_NFAs(nfa_list))
+
+
+
+            
+
+                
+
+
+
+        
+

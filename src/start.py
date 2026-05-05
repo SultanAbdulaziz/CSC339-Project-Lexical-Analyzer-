@@ -1,7 +1,19 @@
-token_list = ["KW_IF","KW_THEN","KW_ELSE","KW_WHILE","KW_FOR","KW_RETURN","KW_CONTINUE","KW_BREAK","KW_INT","KW_FLOAT",
-              "ID","NUM","EQ","NEQ","LEQ","GEQ","ASSIGN","LT","GT","OP_PLUS","OP_MINUS","OP_MUL","OP_DIV"
-                  "LPAREN","RPAREN","LBRACE","RBRACE","SEMI","COMMA"]
-token_dict = dict.fromkeys(token_list)
+from NFA_to_DFA import regexes_parser,simulate
+
+
+token_dict:dict[str,str] = {}
+with open("input.txt", "r") as file:
+    for line in file.readlines():
+        line_split = line.split(",")
+        token = line_split[0][2:-1]
+        regex = line_split[1][2:-2]
+        token_dict[token] = regex
+
+token_list = []
+for token in token_dict.keys():
+    token_list.append(token)
+
+
 
 while True:
     print("--------------------Lexical Analyzer--------------------\n")
@@ -33,18 +45,27 @@ while True:
                     except Exception:
                         print("invalid input")
             case 2:
+                print("Building Regex -> NFA -> DFA...")
                 while True:
                     try:
-                        print("Building Regex -> NFA -> DFA...")
+                        dfa = regexes_parser(token_dict)
+                        input1:str = input("input tape (-1 to go back):")
+                        if input1 == "-1": 
+                            break
+                        print(simulate(input1,dfa))
                     except Exception:
                         print("invalid input")
             case 3: 
                 for item in token_dict.items():
                     print(item)
             case 4: 
-                print("Exiting...") 
+                print("Exiting...")
+                with open("input.txt", "w") as file:
+                    text = []
+                    for token,regex in token_dict.items():
+                        text.append("(\""+token+"\", \""+regex+"\"),\n")
+                    file.write("".join(text))
                 break
             case _: "Invalid choice."
     except Exception:
         print("Invalid input.")
-

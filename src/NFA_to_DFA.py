@@ -1,15 +1,5 @@
 from regex_to_NFA import NFA,State,accept_State,epsilonClosure,NFA_Builder,combine_NFAs
 
-class DFA:
-    """Represents a DFA with Formal description."""
-    def __init__(self, initial_State: DFA_State, accept_states: set[DFA_Accept_State],alphabet: set,Q: set[DFA_State|DFA_Accept_State|DFA_Trap_State]):
-        self.alphabet = alphabet
-        self.initial_State = initial_State
-        self.accept_States = accept_states
-        self.Q = Q
-    
-    def δ(self, state: DFA_State, char: str) -> DFA_State:
-        return state.transitions.get(char, DFA_Trap_State(frozenset()))
 
 class DFA_State():
     def __init__(self,nfa_states:frozenset):
@@ -27,6 +17,17 @@ class DFA_Accept_State(DFA_State):
 class DFA_Trap_State(DFA_State):
     def __init__(self, nfa_states):
         super().__init__(nfa_states)
+
+class DFA:
+    """Represents a DFA with Formal description."""
+    def __init__(self, initial_State: DFA_State, accept_states: set[DFA_Accept_State],alphabet: set,Q: set[DFA_State|DFA_Accept_State|DFA_Trap_State]):
+        self.alphabet = alphabet
+        self.initial_State = initial_State
+        self.accept_States = accept_states
+        self.Q = Q
+    
+    def δ(self, state: DFA_State, char: str) -> DFA_State:
+        return state.transitions.get(char, DFA_Trap_State(frozenset()))
 
 def NFA_to_DFA(nfa:NFA,token_list:list[str]):
     #initialze DFA
@@ -94,6 +95,56 @@ def simulate(input_tape:str,dfa:DFA):
         return current_state.token
     else:
         return "rejected"
+
+def scan(input_text: str, dfa: DFA):
+    tokens = []
+    pos = 0
+    line = 1
+    col = 1
+
+    while pos < len(input_text):
+        # skip spaces
+        if input_text[pos] == ' ':
+            pos += 1
+            col += 1
+            continue
+        # handle newlines
+        if input_text[pos] == '\n':
+            pos += 1
+            line += 1
+            col = 1
+            continue
+
+        # maximal munch
+        current_state = dfa.initial_State
+        last_accept_pos = -1
+        last_accept_token = None
+        i = pos
+
+        while i < len(input_text):
+            current_state = dfa.δ(current_state, input_text[i])
+            if type(current_state) is DFA_Trap_State:
+                break
+            if type(current_state) is DFA_Accept_State:
+                last_accept_pos = i
+                last_accept_token = current_state.token
+            i += 1
+
+        # check if we matched anything
+        if last_accept_pos == -1:
+            print(f"Lexing Error: unexpected character '{input_text[pos]}' at Line {line}, col {col}")
+            return tokens
+
+        lexeme = input_text[pos:last_accept_pos + 1]
+        print(f"'{lexeme}'\t{last_accept_token}\tLine {line}, col {col}")
+        tokens.append((lexeme, last_accept_token, line, col))
+
+        # advance position
+        col += (last_accept_pos + 1 - pos)
+        pos = last_accept_pos + 1
+
+    print("Lexing Completed")
+    return tokens        
 
 
 sLetters = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u",

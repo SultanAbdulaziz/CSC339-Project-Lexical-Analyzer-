@@ -1,12 +1,20 @@
-from NFA_to_DFA import regexes_parser,simulate
+from NFA_to_DFA import regexes_parser, simulate, scan
 
 
 token_dict:dict[str,str] = {}
-with open("input.txt", "r") as file:
+with open("src/input.txt", "r") as file:
     for line in file.readlines():
-        line_split = line.split(",")
-        token = line_split[0][2:-1]
-        regex = line_split[1][2:-2]
+        line = line.strip()
+        if not line: continue
+        
+        # Find quotes to extract token and regex
+        first_quote = line.find('"')
+        second_quote = line.find('"', first_quote + 1)
+        third_quote = line.find('"', second_quote + 1)
+        fourth_quote = line.find('"', third_quote + 1)
+        
+        token = line[first_quote+1:second_quote]
+        regex = line[third_quote+1:fourth_quote]
         token_dict[token] = regex
 
 token_list = []
@@ -17,9 +25,10 @@ while True:
     print("--------------------Lexical Analyzer--------------------\n")
     print("\t\t\tOptions"
       "\n\t\t1-Assign Regex to Token"
-      "\n\t\t2-test input in DFA"
-      "\n\t\t3-Check current list of Regexs"
-      "\n\t\t4-exit"
+      "\n\t\t2-Test single input in DFA"
+      "\n\t\t3-Scan program input"
+      "\n\t\t4-Check current list of Regexs"
+      "\n\t\t5-exit"
       "\n--------------------------------------------------------")
 
     try:
@@ -53,12 +62,26 @@ while True:
                         print(simulate(input1,dfa))
                     except Exception:
                         print("invalid input")
-            case 3: 
+            case 3:
+                print("Building Regex -> NFA -> DFA...")
+                dfa = regexes_parser(token_dict)
+                print("Enter program text (type END on a new line to finish):")
+                lines = []
+                while True:
+                    l = input()
+                    if l == "END":
+                        break
+                    lines.append(l)
+                program = "\n".join(lines)
+                print(f"\n{'Lexeme':<15}{'Token':<15}{'Position'}")
+                print("-" * 45)
+                scan(program, dfa)
+            case 4: 
                 for item in token_dict.items():
                     print(item)
-            case 4: 
+            case 5: 
                 print("Exiting...")
-                with open("input.txt", "w") as file:
+                with open("src/input.txt", "w") as file:
                     text = []
                     for token,regex in token_dict.items():
                         text.append("(\""+token+"\", \""+regex+"\"),\n")

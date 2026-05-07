@@ -30,15 +30,35 @@ class DFA:
         return state.transitions.get(char, DFA_Trap_State(frozenset()))
 
 def NFA_to_DFA(nfa:NFA,token_list:list[str]):
-    #initialze DFA
-    initial_state = DFA_State(frozenset(epsilonClosure(nfa.initial_State)))
+    #initialize DFA
+    initial_closure = frozenset(epsilonClosure(nfa.initial_State))
+    
+    flag = ""
+    accept_states_tokens_in_closure:list[str] = []
+    
+    # Same logic later but doing it on the initial state (maybe accept state)
+    for state in initial_closure:
+        if type(state) is accept_State:
+            flag = "accept"
+            accept_states_tokens_in_closure.append(state.token)
+
+    if flag == "accept":
+        for token in token_list:
+            if token in accept_states_tokens_in_closure:
+                 initial_state = DFA_Accept_State(initial_closure, token)
+                 break
+    else:
+        initial_state = DFA_State(initial_closure)
+
     dfa = DFA(initial_state, set(), nfa.alphabet, {initial_state}) 
+    if flag == "accept":
+        dfa.accept_States.add(initial_state)
 
     #2 queues 1 for each set of states and 1 queue to represent each set as a single DFA state
-    frozen_queue:list[frozenset[State]] = [epsilonClosure(nfa.initial_State)]
+    frozen_queue:list[frozenset[State]] = [initial_closure]
     DFA_states_queue:list[DFA_State] = [initial_state]
     #this is for already proccessed set of states as a signle DFA state
-    seen:dict[frozenset, DFA_State] = {frozenset(epsilonClosure(nfa.initial_State)): initial_state}
+    seen:dict[frozenset, DFA_State] = {initial_closure: initial_state}
 
     #while theres new subsets
     while frozen_queue:

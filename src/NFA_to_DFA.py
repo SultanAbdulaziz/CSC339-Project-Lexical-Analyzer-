@@ -1,7 +1,7 @@
 from regex_to_NFA import NFA,State,accept_State,epsilonClosure,NFA_Builder,combine_NFAs
 
 class DFA:
-    """Represents an NFA with Formal description."""
+    """Represents a DFA with Formal description."""
     def __init__(self, initial_State: DFA_State, accept_states: set[DFA_Accept_State],alphabet: set,Q: set[DFA_State|DFA_Accept_State|DFA_Trap_State]):
         self.alphabet = alphabet
         self.initial_State = initial_State

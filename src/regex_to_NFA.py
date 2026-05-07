@@ -31,7 +31,7 @@ META_CHARS = {'|', '(', ')', '*', '+', '?', '.'} # Regex operators
 def insert_concat_symbol(regex: str):
     """Inserts explicit '.' for implicit concatenation."""
 
-    new_regex = [""] * len(regex) * 2
+    new_regex = []
     i = 0
     while i < len(regex) - 1:
         # If current char is '\', treat '\X' as one unit (escaped literal)

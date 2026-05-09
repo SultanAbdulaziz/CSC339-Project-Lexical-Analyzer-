@@ -43,6 +43,8 @@ def NFA_to_DFA(nfa: NFA, token_list: list[str]):
     flag = ""
     accept_states_tokens_in_closure: list[str] = []
     universal_trap_state: DFA_Trap_State = DFA_Trap_State(frozenset())
+    for alpha in nfa.alphabet:
+        universal_trap_state.add_transition(alpha, universal_trap_state)
 
     # Same logic later but doing it on the initial state (maybe accept state)
     for state in initial_closure:

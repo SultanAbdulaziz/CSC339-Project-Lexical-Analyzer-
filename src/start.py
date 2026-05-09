@@ -36,7 +36,7 @@ with open(INPUT_FILE_PATH, "r") as file:
     for prog_line in file:
         if not prog_line:
             continue
-        program_text += prog_line + " "
+        program_text += prog_line
 
 
 token_list = []

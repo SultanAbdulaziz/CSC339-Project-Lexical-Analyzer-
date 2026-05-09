@@ -47,12 +47,13 @@ while True:
     print("--------------------Lexical Analyzer--------------------\n")
     print("\t\t\tOptions"
           "\n\t\t1-Assign Regex to Token"
-          "\n\t\t2-Scan program input from file"
-          "\n\t\t3-Scan program input"
+          "\n\t\t2-Scan program present already in file"
+          "\n\t\t3-Scan from console provided input"
           "\n\t\t4-Test single input in DFA"
           "\n\t\t5-Check current list of Regexes"
-          "\n\t\t6-exit"
+          "\n\t\t6-Exit"
           "\n--------------------------------------------------------")
+    print(">>> ", end="")
 
     try:
         choice: int = int(input())
@@ -64,6 +65,7 @@ while True:
                         print("choose from the following Token list (-1 to return):\n")
                         for i in range(len(token_list)):
                             print(f"{i + 1}. {token_list[i]}")
+                        print(">>> ", end="")
                         choice2: int = int(input())
                         if choice2 == -1: break
                         token_name = token_list[choice2 - 1]
@@ -122,6 +124,8 @@ while True:
                     for token, regex in token_dict.items():
                         text.append("(\"" + token + "\", \"" + regex + "\"),\n")
                     file.write("".join(text))
+                    file.write("#\n")
+                    file.write(program_text)
                 break
             case _:
                 "Invalid choice."

@@ -27,3 +27,23 @@
 ("RBRACE", "}"),
 ("SEMI", ";"),
 ("COMMA", ","),
+("PERIOD", "\."),
+#
+This is a sample input file for the lexer.
+It contains various keywords, identifiers, numbers, and operators that the lexer should recognize.
+The lexer will read this file and generate tokens based on the defined patterns.
+Each line represents a different token type and its corresponding regular expression pattern.
+The lexer will use these patterns to match and categorize the input text accordingly.
+int my_var = 10 ;
+float x = 3.14 ;
+for ( int i = 0 , i < 10 ; i = i + 1.5 ) {
+    while ( i <= 5 ) {
+        if ( x == 3.14 ) then {
+            x = x * 2.0 / 1.5 - 0.5 ;
+            continue ;
+        } else {
+            if ( x != 0.0 ) break ;
+        }
+    }
+}
+return x >= 10.0 > 5 .

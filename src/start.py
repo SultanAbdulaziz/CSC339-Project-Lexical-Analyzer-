@@ -47,16 +47,17 @@ while True:
     print("--------------------Lexical Analyzer--------------------\n")
     print("\t\t\tOptions"
           "\n\t\t1-Assign Regex to Token"
-          "\n\t\t2-Test single input in DFA"
+          "\n\t\t2-Scan program input from file"
           "\n\t\t3-Scan program input"
-          "\n\t\t4-Check current list of Regexes"
-          "\n\t\t5-Scan program input from file"
+          "\n\t\t4-Test single input in DFA"
+          "\n\t\t5-Check current list of Regexes"
           "\n\t\t6-exit"
           "\n--------------------------------------------------------")
 
     try:
         choice: int = int(input())
         match choice:
+
             case 1:
                 while True:
                     try:
@@ -75,17 +76,14 @@ while True:
                             token_dict[token_name] = input("Regex: ")
                     except Exception:
                         print("invalid input")
+
             case 2:
                 print("Building Regex -> NFA -> DFA...")
                 dfa = regexes_parser(token_dict)
-                while True:
-                    try:
-                        input1: str = input("input tape (-1 to go back):")
-                        if input1 == "-1":
-                            break
-                        print(simulate(input1, dfa))
-                    except Exception:
-                        print("invalid input")
+                print(f"\n{'Lexeme':<15}{'Token':<15}{'Position'}")
+                print("-" * 45)
+                scan(program_text, dfa)
+
             case 3:
                 print("Building Regex -> NFA -> DFA...")
                 dfa = regexes_parser(token_dict)
@@ -100,15 +98,23 @@ while True:
                 print(f"\n{'Lexeme':<15}{'Token':<15}{'Position'}")
                 print("-" * 45)
                 scan(program, dfa)
+
             case 4:
-                for item in token_dict.items():
-                    print(item)
-            case 5:
                 print("Building Regex -> NFA -> DFA...")
                 dfa = regexes_parser(token_dict)
-                print(f"\n{'Lexeme':<15}{'Token':<15}{'Position'}")
-                print("-" * 45)
-                scan(program_text, dfa)
+                while True:
+                    try:
+                        input1: str = input("input tape (-1 to go back):")
+                        if input1 == "-1":
+                            break
+                        print(simulate(input1, dfa))
+                    except Exception:
+                        print("invalid input")
+
+            case 5:
+                for item in token_dict.items():
+                    print(item)
+
             case 6:
                 print("Exiting...")
                 with open(INPUT_FILE_PATH, "w") as file:

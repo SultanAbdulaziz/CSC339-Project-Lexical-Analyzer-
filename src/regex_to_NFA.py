@@ -1,45 +1,37 @@
-"""
-regex_to_NFA22.py - Regex to epsilon-NFA construction.
-
-Converts regular expressions into epsilon-NFAs.
-Supports: concatenation, union (|), Kleene star (*), plus (+), optional (?),
-parentheses for grouping, and escape sequences for literal characters.
-"""
-import sys
-
-sys.setrecursionlimit(300000)
-
 class State:
     """Represents a single state in an NFA with a transition table."""
     def __init__(self):
-        # Transition table: maps a character (or 'Ɛ') to a list of target states
-        self.transitions: dict[str, list[State]] = {}
+        self.transitions: dict[str, set[State]] = {}
 
     def add_transition(self, char, target_state):
         """Adds a transition on the given character to the target state."""
         if char not in self.transitions:
-            self.transitions[char] = []
-        self.transitions[char].append(target_state)
+            self.transitions[char] = set()
+        self.transitions[char].add(target_state)
 
-class accept_state(State):
+class accept_State(State):
     """An accepting state that carries the matched token name."""
     def __init__(self, token: str):
         super().__init__()
         self.token = token
 
-
 class NFA:
-    """Represents an NFA with a single start state and a single accept state."""
-    def __init__(self, start_state: State, accept_state: accept_state):
-        self.start_State = start_state
-        self.accept_State = accept_state
+    """Represents an NFA with Formal description."""
+    def __init__(self, initial_State: State, accept_states: set[accept_State],alphabet: set,Q: set[State|accept_State]):
+        self.alphabet = alphabet
+        self.initial_State = initial_State
+        self.accept_States = accept_states
+        self.Q = Q
+    
+    def δ(self, state: State, char: str) -> set[State]:
+        return state.transitions.get(char, set())
 
 META_CHARS = {'|', '(', ')', '*', '+', '?', '.'} # Regex operators
 
 def insert_concat_symbol(regex: str):
     """Inserts explicit '.' for implicit concatenation."""
 
-    new_regex = [""] * len(regex) * 2
+    new_regex = []
     i = 0
     while i < len(regex) - 1:
         # If current char is '\', treat '\X' as one unit (escaped literal)
@@ -63,7 +55,6 @@ def insert_concat_symbol(regex: str):
     if i < len(regex):
         new_regex.append(regex[-1])
     return "".join(new_regex)
-
 
 def regex_to_postfix(regex: str):
     """Using the Shunting-yard algorithm to convert regex to postfix"""
@@ -112,95 +103,100 @@ def regex_to_postfix(regex: str):
 
     return result
 
+def simpleNFA(c: chr, token: str):
+    """Builds a 2-state NFA that matches a single character."""
+
+    initial_State = State()
+    accept_state = accept_State(token)
+    initial_State.transitions[c] = {accept_state}
+    return NFA(initial_State,{accept_state},{c},{initial_State,accept_state})
+
 def concat_NFAs(NFA1: NFA, NFA2: NFA):
     """Implements concatenation — connects NFA1 and NFA2 in sequence via epsilon-transition."""
 
-    start_State = NFA1.start_State
-    accept_State = NFA2.accept_State
+    initial_state = NFA1.initial_State
+    accept_states = NFA2.accept_States
 
-    # Demote NFA1's accept and link it to NFA2's start
-    NFA1.accept_State.__class__ = State
-    del NFA1.accept_State.token
-    NFA1.accept_State.add_transition('Ɛ', NFA2.start_State)
+    nfa1_accept = NFA1.accept_States.pop()
+    #demote accept_State for NFA1
+    nfa1_accept.__class__ = State
+    del nfa1_accept.token
+    #epsilon transition from acceptState of NFA1 to InitialState NFA2
+    nfa1_accept.add_transition('Ɛ',NFA2.initial_State)
+    
+    return NFA(initial_state, accept_states, NFA1.alphabet.union(NFA2.alphabet), NFA1.Q.union(NFA2.Q).union({initial_state}))
 
-    return NFA(start_State, accept_State)
+def union_NFAs(NFA1: NFA, NFA2: NFA):
+    """Implements '|' — matches either nfa1's or nfa2's pattern."""
 
+    initial_state = State()
+
+    nfa1_acceptstate = NFA1.accept_States.pop()
+    nfa2_acceptstate = NFA2.accept_States.pop()
+
+    #create 1 accpet with either the nfa1 or nfa2 accept state token
+    accept_state = accept_State(nfa1_acceptstate.token)
+
+    #demote both accept states
+    nfa1_acceptstate.__class__ = State
+    del nfa1_acceptstate.token
+    nfa2_acceptstate.__class__ = State
+    del nfa2_acceptstate.token
+
+    nfa1_acceptstate.add_transition('Ɛ',accept_state)
+    nfa2_acceptstate.add_transition('Ɛ',accept_state)
+
+    initial_state.add_transition('Ɛ',NFA1.initial_State)
+    initial_state.add_transition('Ɛ',NFA2.initial_State)
+    return NFA(initial_state,{accept_state},NFA1.alphabet.union(NFA2.alphabet), NFA1.Q.union(NFA2.Q).union({initial_state,accept_state}))
 
 def kleene_NFA(nfa: NFA):
     """Implements '*' (Kleene star) — matches zero or more occurrences."""
 
-    # Skip path: start -> accept (zero occurrences)
-    nfa.start_State.add_transition('Ɛ', nfa.accept_State)
+    initial_state = State()
 
-    # Loop path: accept -> start (repeat)
-    nfa.accept_State.add_transition('Ɛ', nfa.start_State)
+    old_acceptstate = nfa.accept_States.pop()
 
-    return NFA(nfa.start_State, nfa.accept_State)
+    #create 1 accpet with either the nfa1 or nfa2 accept state token
+    new_accept_state = accept_State(old_acceptstate.token)
 
+    #demote both accept states
+    old_acceptstate.__class__ = State
+    del old_acceptstate.token
+
+    initial_state.add_transition('Ɛ',nfa.initial_State)
+    initial_state.add_transition('Ɛ',new_accept_state)
+    new_accept_state.add_transition('Ɛ',initial_state)
+    old_acceptstate.add_transition('Ɛ',new_accept_state)
+    
+
+    return NFA(initial_state,{new_accept_state},nfa.alphabet,nfa.Q.union({initial_state,new_accept_state}))
 
 def closure_NFA(nfa: NFA):
     """Implements '+' (positive closure) — matches one or more occurrences."""
-
-    # Loop path only
-    nfa.accept_State.add_transition('Ɛ', nfa.start_State)
-
-    return NFA(nfa.start_State, nfa.accept_State)
-
-
-def union_NFAs(nfa1: NFA, nfa2: NFA):
-    """Implements '|' — matches either nfa1's or nfa2's pattern."""
-
-    new_start_State = State()
-
-    # point to both start states of the two NFAs
-    new_start_State.add_transition('Ɛ', nfa1.start_State)
-    new_start_State.add_transition('Ɛ', nfa2.start_State)
-
-    new_accept_State = accept_state(nfa1.accept_State.token)
-
-    # combine the accept states of the two NFAs
-    nfa1.accept_State.add_transition('Ɛ', new_accept_State)
-    nfa2.accept_State.add_transition('Ɛ', new_accept_State)
-
-    # Demote old accept states so only the new one is accepting
-    nfa1.accept_State.__class__ = State
-    del nfa1.accept_State.token
-    nfa2.accept_State.__class__ = State
-    del nfa2.accept_State.token
-
-    new_nfa = NFA(new_start_State, new_accept_State)
-    return new_nfa
-
+    accept_state = nfa.accept_States.pop()
+    accept_state.add_transition('Ɛ', nfa.initial_State)
+    nfa.accept_States.add(accept_state)
+    return nfa
 
 def optionalNFA(nfa: NFA):
     """Implements '?' — matches zero or one occurrence of the NFA's pattern."""
 
-    new_accepted_state = accept_state(nfa.accept_State.token)
+    old_accept_state = nfa.accept_States.pop()
+    new_accept_state = accept_State(old_accept_state.token)
 
     # ε transitions from the start and old accept state to the new one (ε|"one occurence of the regex") 
-    nfa.start_State.add_transition('Ɛ', new_accepted_state)
-    nfa.accept_State.add_transition('Ɛ', new_accepted_state)
+    nfa.initial_State.add_transition('Ɛ',new_accept_state)
+    old_accept_state.add_transition('Ɛ',new_accept_state)
 
     # Demote the old accept state to a plain State
-    nfa.accept_State.__class__ = State
-    del nfa.accept_State.token
+    old_accept_state.__class__ = State
+    del old_accept_state.token
 
     # Return an NFA object
-    return NFA(nfa.start_State, new_accepted_state)
+    return NFA(nfa.initial_State,{new_accept_state},nfa.alphabet,nfa.Q.union({new_accept_state}))
 
-
-
-def simpleNFA(c: chr, token: str):
-    """Builds a 2-state NFA that matches a single character."""
-
-    start_State = State()
-    accept_State = accept_state(token)
-    start_State.add_transition(c, accept_State)
-    
-    return NFA(start_State, accept_State)
-
-
-def epsilonNFA_Builder(regex: str, token: str) -> NFA:
+def NFA_Builder(regex: str, token: str) -> NFA:
     """Builds an epsilon-NFA from a regex string using postfix conversion.
     
     Args:
@@ -239,7 +235,6 @@ def epsilonNFA_Builder(regex: str, token: str) -> NFA:
 
     return buffer[0]
 
-
 def epsilonClosure(state: State) -> set[State]:
     """Computes all states reachable from the given state via epsilon-transitions using BFS.
     
@@ -248,21 +243,26 @@ def epsilonClosure(state: State) -> set[State]:
     Returns:
         A set of all states reachable via one or more epsilon-transitions.
     """
-    closure = set()
-    deque: list[State] = []
-    if 'Ɛ' in state.transitions.keys():
-        deque = list(state.transitions['Ɛ'])
-
-    while deque:
-        item = deque.pop(0)
-        closure.add(item)
-        if 'Ɛ' in item.transitions.keys():
-            for value in item.transitions['Ɛ']:
-                if value not in closure:
-                    deque.append(value)
-
+    stack:list[State] = list(state.transitions.get('Ɛ',[]))
+    closure:set[State] = {state}
+    while stack:
+        state = stack.pop()
+        for target_state in state.transitions.get('Ɛ',set()):
+            if target_state not in closure:
+                stack.append(target_state)
+                closure.add(target_state)
+        closure.add(state)
+    
     return closure
 
-
-# nfa = epsilonNFA_Builder("a*b*", "True")
-# print(regex_to_postfix(r"ab|bd|cd\+"))
+def combine_NFAs(NFA_list:list[NFA]):
+    initial_state = State()
+    accept_states:set[accept_State] = set()
+    alphabet:set[str] = set()
+    Q:set[State | accept_State] = set() 
+    for nfa in NFA_list:
+        initial_state.add_transition('Ɛ',nfa.initial_State)
+        accept_states.update(nfa.accept_States)
+        alphabet.update(nfa.alphabet)
+        Q.update(nfa.Q)
+    return NFA(initial_state,accept_states,alphabet,Q)

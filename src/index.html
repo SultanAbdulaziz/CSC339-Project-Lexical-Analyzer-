@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lexical Analyzer — Regex → NFA → DFA</title>
+  <meta name="description" content="Interactive lexical analyzer built from scratch. Watch tokens recognized through Thompson's construction, subset construction, and maximal-munch scanning — all running in your browser.">
+
+  <!-- Prevent flash: set theme before any paint -->
+  <script>
+    (function() {
+      const stored = localStorage.getItem('theme');
+      const system = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const dark = stored ? stored === 'dark' : system;
+      if (dark) document.documentElement.classList.add('dark');
+    })();
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            // Amber/gold accent — echoes the report cover's warm underlines.
+            // We use 700 as the default brand color for a more grounded, scholarly feel
+            // than the brighter 600.
+            accent: {
+              50:  '#fffbeb',
+              100: '#fef3c7',
+              200: '#fde68a',
+              300: '#fcd34d',
+              400: '#fbbf24',
+              500: '#f59e0b',
+              600: '#d97706',
+              700: '#b45309',
+              800: '#92400e',
+              900: '#78350f',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- ===== Loading screen ===== -->
+  <div id="loading-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-stone-950">
+    <div class="text-center px-6 max-w-md">
+      <div class="inline-flex items-center justify-center w-16 h-16 mb-6">
+        <svg class="animate-spin text-accent-600 dark:text-accent-400" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </svg>
+      </div>
+      <h1 class="text-xl font-semibold mb-2">Starting Lexical Analyzer</h1>
+      <p id="loading-status" class="text-sm text-stone-500 dark:text-stone-400">Downloading Python runtime…</p>
+      <div class="mt-6 h-1 w-full bg-stone-100 dark:bg-stone-900 rounded-full overflow-hidden">
+        <div id="loading-bar" class="h-full bg-accent-600 dark:bg-accent-400 transition-all duration-300" style="width: 10%;"></div>
+      </div>
+      <p class="mt-6 text-xs text-stone-400 dark:text-stone-500">First load downloads ~10 MB of Python (cached afterward).</p>
+    </div>
+  </div>
+
+  <!-- ===== Error screen (hidden by default) ===== -->
+  <div id="error-screen" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-stone-950 px-6">
+    <div class="max-w-md text-center">
+      <div class="inline-flex items-center justify-center w-12 h-12 mb-4 rounded-full bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <h1 class="text-xl font-semibold mb-2">Failed to start</h1>
+      <p id="error-message" class="text-sm text-stone-600 dark:text-stone-400 mb-6"></p>
+      <button onclick="location.reload()" class="px-4 py-2 text-sm font-medium rounded-md bg-accent-600 text-white hover:bg-accent-700 transition">
+        Reload page
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== App ===== -->
+  <div id="app" class="hidden flex-1 flex flex-col">
+
+    <!-- Header -->
+    <header class="border-b border-stone-200 dark:border-stone-800 bg-white/80 dark:bg-stone-950/80 backdrop-blur-sm sticky top-0 z-30">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <!-- Logo: dark warm box with a gold serif lambda -->
+          <div class="w-8 h-8 rounded-md bg-stone-900 dark:bg-stone-100 flex items-center justify-center text-accent-400 dark:text-accent-700 italic font-serif font-semibold text-base leading-none">
+            λ
+          </div>
+          <div>
+            <h1 class="text-sm font-semibold leading-none">Lexical Analyzer</h1>
+            <p class="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5 leading-none">
+              Regex → NFA → DFA → Scanner
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1">
+          <!-- Build status pill (updated by JS) -->
+          <div id="build-status" class="hidden sm:flex items-center gap-2 px-3 h-8 mr-2 text-xs rounded-md border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-400">
+            <span class="w-1.5 h-1.5 rounded-full bg-stone-400"></span>
+            <span id="build-status-text">Not built</span>
+          </div>
+
+          <!-- GitHub link -->
+          <a id="gh-link" href="#" target="_blank" rel="noopener" class="w-8 h-8 flex items-center justify-center rounded-md text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition" aria-label="View source on GitHub">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.4 3-.405 1.02.005 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          </a>
+
+          <!-- Theme toggle -->
+          <button id="theme-toggle" class="w-8 h-8 flex items-center justify-center rounded-md text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition" aria-label="Toggle theme">
+            <svg class="block dark:hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="hidden dark:block" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="border-t border-stone-200 dark:border-stone-800">
+        <nav class="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 -mb-px overflow-x-auto" role="tablist">
+          <button data-tab="tokens" class="tab-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span>Tokens</span>
+          </button>
+          <button data-tab="scan" class="tab-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span>Scan</span>
+          </button>
+          <button data-tab="nfa" class="tab-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="8.5" y1="7.5" x2="11" y2="15.5"/><line x1="15.5" y1="7.5" x2="13" y2="15.5"/></svg>
+            <span>NFA</span>
+          </button>
+          <button data-tab="dfa" class="tab-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            <span>DFA</span>
+          </button>
+          <button data-tab="step" class="tab-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>Step-by-Step</span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+      <section id="tab-tokens" data-panel class="tab-panel"></section>
+      <section id="tab-scan" data-panel class="tab-panel hidden"></section>
+      <section id="tab-nfa" data-panel class="tab-panel hidden"></section>
+      <section id="tab-dfa" data-panel class="tab-panel hidden"></section>
+      <section id="tab-step" data-panel class="tab-panel hidden"></section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-stone-200 dark:border-stone-800 mt-auto">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 text-xs text-stone-500 dark:text-stone-400 flex flex-wrap items-center justify-between gap-2">
+        <p>
+          CSC339 · Theory of Computation · King Saud University ·
+          <span class="font-mono">Spring 2026</span>
+        </p>
+        <p>
+          Built from scratch · Powered by
+          <a href="https://pyodide.org" target="_blank" rel="noopener" class="underline hover:text-stone-700 dark:hover:text-stone-300">Pyodide</a>
+        </p>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-40 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Pyodide -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.29.4/full/pyodide.js"></script>
+
+  <!-- Graph rendering: Viz.js (Graphviz compiled to WASM) -->
+  <script src="https://cdn.jsdelivr.net/npm/@viz-js/viz@3.11.0/lib/viz-standalone.js"></script>
+
+  <!-- Pan/zoom for the rendered SVG -->
+  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+
+  <!-- App entry -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -13,10 +13,16 @@ export class StepTab {
     this.state = null;      
     this.isActive = false;  
     this.baseSource = '';
+    this.isPlaying = false;
+    this.playTimer = null;
+    this.playDelay = 450;
+    this.lastLoggedStep = -1;
+    this.finishedNotified = false;
     this.render();
   }
 
   setBuilt(built) {
+    if (!built) this._stopPlayback();
     this.isBuilt = built;
     this.render();
   }
@@ -53,11 +59,21 @@ export class StepTab {
           <div class="space-y-4">
             <div class="p-4 rounded-md border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/30 flex flex-wrap gap-2 items-center">
               <button id="btn-init" class="btn btn-primary w-full justify-center mb-2">Start Debugger</button>
-              <div class="grid grid-cols-3 gap-2 w-full">
+              <div class="grid grid-cols-2 gap-2 w-full">
+                <button id="btn-play" class="btn btn-secondary text-xs" disabled>Play</button>
                 <button id="btn-step" class="btn btn-secondary text-xs" disabled>Step</button>
                 <button id="btn-next" class="btn btn-secondary text-xs" disabled>Run Token</button>
                 <button id="btn-end" class="btn btn-secondary text-xs" disabled>Run All</button>
               </div>
+              <label class="w-full flex items-center justify-between gap-3 mt-2 text-xs text-stone-500 dark:text-stone-400">
+                <span>Playback speed</span>
+                <select id="step-speed" class="px-2 py-1 rounded border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 text-stone-700 dark:text-stone-300">
+                  <option value="800">0.5×</option>
+                  <option value="450" selected>1×</option>
+                  <option value="220">2×</option>
+                  <option value="90">4×</option>
+                </select>
+              </label>
               <button id="btn-reset" class="btn btn-secondary w-full justify-center mt-2 hidden text-xs text-red-600 dark:text-red-400">Stop / Reset</button>
             </div>
 
@@ -106,6 +122,8 @@ export class StepTab {
       if (!source.trim()) return toast('Enter source text first', 'error');
       
       this.baseSource = source;
+      this.lastLoggedStep = -1;
+      this.finishedNotified = false;
       
       // 1. Generate and Render the Timeline Graph Upfront
       await this._renderTimelineGraph(source);
@@ -120,22 +138,36 @@ export class StepTab {
       this._updateUI();
     });
 
+    q('#btn-play').addEventListener('click', () => this._togglePlayback());
+
     q('#btn-step').addEventListener('click', async () => {
+      this._stopPlayback();
       this.state = await this.getLexer().stepAdvance();
       this._updateUI();
     });
 
     q('#btn-next').addEventListener('click', async () => {
+      this._stopPlayback();
       this.state = await this.getLexer().stepRunToNextToken();
       this._updateUI();
     });
 
     q('#btn-end').addEventListener('click', async () => {
+      this._stopPlayback();
       this.state = await this.getLexer().stepRunToEnd();
       this._updateUI();
     });
 
+    q('#step-speed').addEventListener('change', event => {
+      this.playDelay = Number(event.target.value);
+      if (this.isPlaying) {
+        this._stopPlayback();
+        this._togglePlayback();
+      }
+    });
+
     q('#btn-reset').addEventListener('click', () => {
+      this._stopPlayback();
       this.isActive = false;
       this.state = null;
       this._togglePlaybackMode(false);
@@ -151,13 +183,59 @@ export class StepTab {
     q('#btn-init').classList.toggle('hidden', active);
     q('#btn-reset').classList.toggle('hidden', !active);
     
-    ['#btn-step', '#btn-next', '#btn-end'].forEach(id => {
+    ['#btn-play', '#btn-step', '#btn-next', '#btn-end'].forEach(id => {
       q(id).disabled = !active;
     });
 
     if (active) {
       q('#step-event').innerHTML = ''; // Clear log on start
     }
+  }
+
+  _togglePlayback() {
+    if (!this.isActive || !this.state || this._isComplete()) return;
+    if (this.isPlaying) {
+      this._stopPlayback();
+      return;
+    }
+    this.isPlaying = true;
+    this._updatePlayButton();
+    this._playNext();
+  }
+
+  _stopPlayback() {
+    this.isPlaying = false;
+    if (this.playTimer) clearTimeout(this.playTimer);
+    this.playTimer = null;
+    this._updatePlayButton();
+  }
+
+  _updatePlayButton() {
+    const btn = this.container?.querySelector('#btn-play');
+    if (!btn) return;
+    btn.textContent = this.isPlaying ? 'Pause' : 'Play';
+    btn.setAttribute('aria-pressed', this.isPlaying ? 'true' : 'false');
+  }
+
+  async _playNext() {
+    if (!this.isPlaying || this._isComplete()) {
+      this._stopPlayback();
+      return;
+    }
+    this.state = await this.getLexer().stepAdvance();
+    this._updateUI();
+    if (!this.isPlaying || this._isComplete()) {
+      this._stopPlayback();
+      return;
+    }
+    this.playTimer = setTimeout(() => this._playNext(), this.playDelay);
+  }
+
+  _isComplete() {
+    if (!this.state) return false;
+    return Boolean(this.state.error) ||
+      (this.state.pos >= this.state.source_len && this.state.inner_i === 0) ||
+      String(this.state.last_event || '').includes('Completed');
   }
 
   async _renderTimelineGraph(source) {
@@ -186,13 +264,17 @@ export class StepTab {
     const { pos, inner_i, tokens, last_event, step_count, source_len } = this.state;
 
     // Highlight Tape & Cursor
-    const cursorIndex = pos + inner_i;
+    const cursorIndex = Math.min(pos + inner_i, source_len);
     q('#step-highlight').innerHTML = highlightSource(this.baseSource, tokens, { cursorPos: cursorIndex });
 
     // Event Log
     const log = q('#step-event');
-    const time = new Date().toLocaleTimeString([], {hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit'});
-    log.innerHTML = `<div class="mb-1 text-accent-600 dark:text-accent-400">[${time}] ${escapeHtml(last_event)}</div>` + log.innerHTML;
+    if (step_count !== this.lastLoggedStep) {
+      const time = new Date().toLocaleTimeString([], {hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit'});
+      const tone = this.state.error ? 'text-red-600 dark:text-red-400' : 'text-accent-600 dark:text-accent-400';
+      log.innerHTML = `<div class="mb-1 ${tone}">[${time}] ${escapeHtml(last_event)}</div>` + log.innerHTML;
+      this.lastLoggedStep = step_count;
+    }
 
     // Tokens Table
     if (tokens.length > 0) {
@@ -221,9 +303,13 @@ export class StepTab {
     this._updateGraphVisibility(step_count);
 
     // End State check
-    if (cursorIndex >= source_len && last_event.includes("Completed")) {
-      toast("Scanning complete!", "success");
-      ['#btn-step', '#btn-next', '#btn-end'].forEach(id => q(id).disabled = true);
+    if (this._isComplete()) {
+      this._stopPlayback();
+      if (!this.finishedNotified) {
+        toast(this.state.error ? this.state.error : 'Scanning complete!', this.state.error ? 'error' : 'success');
+        this.finishedNotified = true;
+      }
+      ['#btn-play', '#btn-step', '#btn-next', '#btn-end'].forEach(id => q(id).disabled = true);
     }
   }
 
@@ -243,6 +329,7 @@ export class StepTab {
       // Hide future nodes, reveal past/present nodes
       node.style.opacity = stepIdx > currentStep ? '0' : '1';
       node.style.transition = 'opacity 0.2s ease-in-out';
+      node.classList.toggle('is-current-step', stepIdx === currentStep);
 
       // Highlight the active (current) node
       const shape = node.querySelector('ellipse, polygon');

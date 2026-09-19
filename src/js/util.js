@@ -82,6 +82,7 @@ export function initTheme() {
     const html = document.documentElement;
     const dark = html.classList.toggle('dark');
     localStorage.setItem('theme', dark ? 'dark' : 'light');
+    document.dispatchEvent(new CustomEvent('themechange', { detail: { dark } }));
   });
 }
 
@@ -98,7 +99,14 @@ let _tabHandlers = {};
 export function initTabs() {
   const buttons = document.querySelectorAll('.tab-btn');
   buttons.forEach(btn => {
+    btn.setAttribute('role', 'tab');
+    btn.id = `tab-button-${btn.dataset.tab}`;
+    btn.setAttribute('aria-controls', `tab-${btn.dataset.tab}`);
     btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-labelledby', `tab-button-${panel.id.replace('tab-', '')}`);
   });
   activateTab('tokens');
 }
@@ -109,7 +117,10 @@ export function onTabActivated(tabName, handler) {
 
 export function activateTab(name) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.dataset.active = btn.dataset.tab === name ? 'true' : 'false';
+    const active = btn.dataset.tab === name;
+    btn.dataset.active = active ? 'true' : 'false';
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    btn.tabIndex = active ? 0 : -1;
   });
   document.querySelectorAll('.tab-panel').forEach(panel => {
     panel.classList.toggle('hidden', panel.id !== `tab-${name}`);
@@ -193,11 +204,7 @@ export function highlightSource(source, tokens, { cursorPos = null } = {}) {
   let i = 0;
   let spanIdx = 0;
 
-  const cursorHtml = () => (
-    '<span class="inline-block align-baseline" ' +
-    'style="background:#ef4444;color:white;padding:0 3px;border-radius:2px;' +
-    'animation:pulse 1s infinite;">▼</span>'
-  );
+  const cursorHtml = () => '<span class="source-cursor" aria-label="Current input position"></span>';
 
   while (i < source.length) {
     if (cursorPos === i) parts.push(cursorHtml());

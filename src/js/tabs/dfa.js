@@ -88,7 +88,7 @@ export class DfaTab {
               <input id="dfa-hide-trap" type="checkbox" ${this.hideTrap ? 'checked' : ''} class="w-4 h-4 rounded accent-accent-600">
               Hide trap state
             </label>
-            <p class="text-xs text-stone-500 dark:text-stone-400 -mt-3">The dead state for invalid transitions — hiding it keeps the diagram readable.</p>
+            <p class="text-xs text-stone-500 dark:text-stone-400 -mt-3">The dead state handles invalid transitions. Hiding it keeps the diagram readable.</p>
 
             <div class="text-xs space-y-1.5 pt-3 border-t border-stone-200 dark:border-stone-800 text-stone-500 dark:text-stone-400">
               <div class="flex justify-between"><span>Reachable</span><span id="dfa-total" class="font-mono text-stone-700 dark:text-stone-300">—</span></div>

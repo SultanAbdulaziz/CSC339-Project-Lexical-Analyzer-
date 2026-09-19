@@ -46,6 +46,19 @@ export async function renderDot(containerEl, dotSource, opts = {}) {
     throw err;
   }
 
+  // Graphviz emits an opaque white canvas. Keep the graph integrated with
+  // the surrounding light/dark surface and recolor edges for dark mode.
+  const canvas = svg.querySelector('g.graph > polygon');
+  if (canvas) canvas.setAttribute('fill', 'transparent');
+  if (document.documentElement.classList.contains('dark')) {
+    svg.querySelectorAll('g.edge path').forEach(el => el.setAttribute('stroke', '#a8a29e'));
+    svg.querySelectorAll('g.edge polygon').forEach(el => {
+      el.setAttribute('stroke', '#a8a29e');
+      el.setAttribute('fill', '#a8a29e');
+    });
+    svg.querySelectorAll('g.edge text').forEach(el => el.setAttribute('fill', '#d6d3d1'));
+  }
+
   // ── Fix for container overflow ──────────
   // Make the SVG absolute *before* appending so it doesn't stretch the page layout.
   // We'll let svg-pan-zoom handle the sizing/viewport.

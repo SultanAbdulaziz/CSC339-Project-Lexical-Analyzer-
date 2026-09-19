@@ -6,11 +6,13 @@
  */
 import { DEFAULT_TOKENS, toast, escapeHtml } from '../util.js';
 
+const STORAGE_KEY = 'lexical-analyzer:token-specs';
+
 export class TokensTab {
   constructor({ container, onBuild }) {
     this.container = container;
     this.onBuild = onBuild;
-    this.tokens = DEFAULT_TOKENS.map(([name, regex]) => ({ name, regex }));
+    this.tokens = this._loadTokens();
     this.render();
   }
 
@@ -20,7 +22,22 @@ export class TokensTab {
 
   setTokens(arr) {
     this.tokens = arr.map(t => ({ ...t }));
+    this._persist();
     this.renderRows();
+  }
+
+  _loadTokens() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (Array.isArray(stored) && stored.length && stored.every(t =>
+        typeof t?.name === 'string' && typeof t?.regex === 'string'
+      )) return stored;
+    } catch (_) { /* Ignore corrupt local state and use the documented defaults. */ }
+    return DEFAULT_TOKENS.map(([name, regex]) => ({ name, regex }));
+  }
+
+  _persist() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.tokens));
   }
 
   render() {
@@ -32,7 +49,7 @@ export class TokensTab {
             <h2 class="text-lg font-semibold">Token Specifications</h2>
             <p class="text-sm text-stone-500 dark:text-stone-400 mt-1 max-w-2xl">
               Each row defines a token class as a (name, regex) pair.
-              <strong class="font-medium text-stone-700 dark:text-stone-300">Order matters</strong> —
+              <strong class="font-medium text-stone-700 dark:text-stone-300">Order matters:</strong>
               tokens listed earlier win when multiple regexes match the same longest prefix.
             </p>
           </div>
@@ -62,14 +79,16 @@ export class TokensTab {
         </details>
 
         <!-- Table -->
-        <div class="border border-stone-200 dark:border-stone-800 rounded-md overflow-hidden">
-          <div class="grid grid-cols-[36px_3fr_5fr_88px] gap-0 bg-stone-50 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-800 text-xs font-medium text-stone-500 dark:text-stone-400 px-1">
-            <div class="px-2 py-2">#</div>
-            <div class="px-2 py-2">Token name</div>
-            <div class="px-2 py-2">Regular expression</div>
-            <div class="px-2 py-2 text-right">Actions</div>
+        <div class="border border-stone-200 dark:border-stone-800 rounded-md overflow-x-auto subtle-scroll">
+          <div class="min-w-[720px]">
+            <div class="grid grid-cols-[52px_3fr_5fr_88px] gap-0 bg-stone-50 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-800 text-xs font-medium text-stone-500 dark:text-stone-400 px-1">
+              <div class="px-2 py-2">#</div>
+              <div class="px-2 py-2">Token name</div>
+              <div class="px-2 py-2">Regular expression</div>
+              <div class="px-2 py-2 text-right">Actions</div>
+            </div>
+            <div id="token-rows" class="divide-y divide-stone-100 dark:divide-stone-900"></div>
           </div>
-          <div id="token-rows" class="divide-y divide-stone-100 dark:divide-stone-900"></div>
         </div>
 
         <!-- Add row -->
@@ -83,6 +102,7 @@ export class TokensTab {
     this.container.querySelector('#reset-tokens-btn').addEventListener('click', () => {
       if (confirm('Reset all tokens to defaults?')) {
         this.tokens = DEFAULT_TOKENS.map(([name, regex]) => ({ name, regex }));
+        this._persist();
         this.renderRows();
         toast('Reset to default token set');
       }
@@ -90,6 +110,7 @@ export class TokensTab {
 
     this.container.querySelector('#add-token-btn').addEventListener('click', () => {
       this.tokens.push({ name: '', regex: '' });
+      this._persist();
       this.renderRows();
       // Focus the new name input
       const lastNameInput = this.container.querySelector(`[data-row="${this.tokens.length - 1}"] [data-field="name"]`);
@@ -97,6 +118,7 @@ export class TokensTab {
     });
 
     this.container.querySelector('#build-btn').addEventListener('click', () => {
+      this._persist();
       this.onBuild(this.getTokens());
     });
 
@@ -113,6 +135,7 @@ export class TokensTab {
         const row = parseInt(e.target.closest('[data-row]').dataset.row, 10);
         const field = e.target.dataset.field;
         this.tokens[row][field] = e.target.value;
+        this._persist();
       });
     });
     rowsEl.querySelectorAll('[data-action]').forEach(btn => {
@@ -122,12 +145,51 @@ export class TokensTab {
         this._handleAction(row, action);
       });
     });
+
+    rowsEl.querySelectorAll('[data-drag-handle]').forEach(handle => {
+      handle.addEventListener('dragstart', event => {
+        const row = event.target.closest('[data-row]');
+        this.draggedRow = Number(row.dataset.row);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(this.draggedRow));
+        row.classList.add('token-row-dragging');
+      });
+      handle.addEventListener('dragend', () => {
+        this.draggedRow = null;
+        rowsEl.querySelectorAll('[data-row]').forEach(row => {
+          row.classList.remove('token-row-dragging', 'token-row-drop-target');
+        });
+      });
+    });
+
+    rowsEl.querySelectorAll('[data-row]').forEach(row => {
+      row.addEventListener('dragover', event => {
+        if (this.draggedRow == null) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        rowsEl.querySelectorAll('[data-row]').forEach(el => el.classList.remove('token-row-drop-target'));
+        row.classList.add('token-row-drop-target');
+      });
+      row.addEventListener('drop', event => {
+        event.preventDefault();
+        const targetRow = Number(row.dataset.row);
+        if (this.draggedRow == null || targetRow === this.draggedRow) return;
+        const [moved] = this.tokens.splice(this.draggedRow, 1);
+        this.tokens.splice(targetRow, 0, moved);
+        this.draggedRow = null;
+        this._persist();
+        this.renderRows();
+      });
+    });
   }
 
   _rowHtml(i, tk) {
     return `
-      <div data-row="${i}" class="grid grid-cols-[36px_3fr_5fr_88px] items-center gap-0 hover:bg-stone-50/50 dark:hover:bg-stone-900/30 transition-colors">
-        <div class="px-3 py-1.5 text-xs text-stone-400 dark:text-stone-500 font-mono text-center">${i + 1}</div>
+      <div data-row="${i}" class="grid grid-cols-[52px_3fr_5fr_88px] items-center gap-0 hover:bg-stone-50/50 dark:hover:bg-stone-900/30 transition-colors">
+        <div class="px-1 py-1.5 text-xs text-stone-400 dark:text-stone-500 font-mono flex items-center justify-center gap-1">
+          <button data-drag-handle draggable="true" type="button" title="Drag to reorder" aria-label="Drag ${escapeHtml(tk.name || ('token ' + (i + 1)))} to reorder" class="token-drag-handle">⠿</button>
+          <span>${i + 1}</span>
+        </div>
         <div class="px-1 py-0.5">
           <input data-field="name" class="token-input" type="text" value="${escapeHtml(tk.name)}" placeholder="TOKEN_NAME" autocomplete="off" spellcheck="false">
         </div>
@@ -157,6 +219,7 @@ export class TokensTab {
     } else if (action === 'delete') {
       this.tokens.splice(row, 1);
     }
+    this._persist();
     this.renderRows();
   }
 }

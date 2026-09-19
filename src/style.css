@@ -23,6 +23,16 @@
   color: rgb(180 83 9); /* accent-600 */
   border-bottom-color: rgb(180 83 9);
 }
+.tab-btn:focus-visible,
+.btn:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgb(217 119 6);
+  outline-offset: 2px;
+}
 .dark .tab-btn[data-active="true"] {
   color: rgb(251 191 36); /* accent-400 (amber-400) */
   border-bottom-color: rgb(251 191 36);
@@ -51,6 +61,22 @@
   border-color: rgb(180 83 9); /* accent-500 */
   background: rgb(249 250 251); /* stone-50 */
 }
+
+.token-drag-handle {
+  width: 1.25rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(168 162 158);
+  cursor: grab;
+  border-radius: 0.25rem;
+}
+.token-drag-handle:active { cursor: grabbing; }
+.token-drag-handle:hover { color: rgb(87 83 78); background: rgb(245 245 244); }
+.dark .token-drag-handle:hover { color: rgb(214 211 209); background: rgb(41 37 36); }
+.token-row-dragging { opacity: 0.4; }
+.token-row-drop-target { box-shadow: inset 0 2px 0 rgb(217 119 6); }
 .dark .token-input:focus {
   background: rgb(28 25 23); /* stone-900 */
 }
@@ -72,6 +98,33 @@
   font-family: var(--tw-font-mono, ui-monospace, monospace);
   font-size: 0.8125rem;
   cursor: help;
+}
+
+.source-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.15em;
+  margin: 0 1px;
+  vertical-align: -0.18em;
+  border-radius: 1px;
+  background: rgb(217 119 6);
+  box-shadow: 0 0 0 2px rgb(245 158 11 / 0.2);
+  animation: cursor-pulse 0.9s ease-in-out infinite;
+}
+@keyframes cursor-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+#step-graph-container g.node.is-current-step ellipse,
+#step-graph-container g.node.is-current-step polygon {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: state-pulse 0.9s ease-in-out infinite;
+}
+@keyframes state-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgb(245 158 11 / 0)); }
+  50% { transform: scale(1.06); filter: drop-shadow(0 0 6px rgb(245 158 11 / 0.65)); }
 }
 
 /* ===== Toasts ===== */
@@ -144,6 +197,13 @@
 .btn-icon-only {
   width: 2.25rem;
   padding: 0;
+}
+
+@media (max-width: 640px) {
+  .tab-btn { padding-inline: 0.625rem; }
+  #nfa-graph-container,
+  #dfa-graph-container,
+  #step-graph-container { height: 440px !important; }
 }
 
 /* ===== Subtle scrollbars ===== */

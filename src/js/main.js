@@ -128,24 +128,57 @@ async function bootstrap() {
   onTabActivated('dfa', () => state.tabs.dfa?.onShow());
   onTabActivated('step', () => state.tabs.step?.onShow());
 
-  // Step-by-Step is the next phase
-  document.getElementById('tab-step').innerHTML = `
-    <div class="flex flex-col items-center justify-center py-24 text-center">
-      <div class="w-12 h-12 rounded-full bg-stone-100 dark:bg-stone-900 flex items-center justify-center mb-4">
-        <svg class="text-stone-400" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      </div>
-      <h2 class="text-base font-medium mb-1">Coming next</h2>
-      <p class="text-sm text-stone-500 dark:text-stone-400 max-w-sm">
-        The step-by-step scanner animation arrives in Phase 3.
-      </p>
-    </div>
-  `;
+  initKeyboardShortcuts();
 
   setBuildStatus('idle', 'Not built');
 
   // Auto-build on first load with defaults — gives the user something to scan immediately
   showApp();
   await handleBuild(state.tabs.tokens.getTokens(), { silent: true });
+}
+
+// ---------------------------------------------------------------------------
+// Keyboard shortcuts
+// ---------------------------------------------------------------------------
+
+function initKeyboardShortcuts() {
+  const tabNames = ['tokens', 'scan', 'nfa', 'dfa', 'step'];
+
+  document.addEventListener('keydown', event => {
+    const target = event.target;
+    const editing = target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      target?.isContentEditable;
+
+    const tabIndex = Number(event.key) - 1;
+    if (event.altKey && Number.isInteger(tabIndex) && tabNames[tabIndex]) {
+      event.preventDefault();
+      activateTab(tabNames[tabIndex]);
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      const active = document.querySelector('.tab-btn[data-active="true"]')?.dataset.tab;
+      if (active === 'tokens') document.getElementById('build-btn')?.click();
+      if (active === 'scan') document.getElementById('scan-btn')?.click();
+      if (active === 'step') {
+        const start = document.getElementById('btn-init');
+        const play = document.getElementById('btn-play');
+        (start && !start.classList.contains('hidden') ? start : play)?.click();
+      }
+      return;
+    }
+
+    if (!editing && event.code === 'Space') {
+      const active = document.querySelector('.tab-btn[data-active="true"]')?.dataset.tab;
+      if (active === 'step' && !document.getElementById('btn-play')?.disabled) {
+        event.preventDefault();
+        document.getElementById('btn-play')?.click();
+      }
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -19,6 +19,8 @@ lib64/
 # The web app loads its Python runtime directly through Pyodide.
 !src/lib/
 !src/lib/**
+src/lib/**/__pycache__/
+src/lib/**/*.py[cod]
 parts/
 sdist/
 var/
@@ -122,6 +124,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.manim-venv/
 env/
 venv/
 ENV/
@@ -157,3 +160,6 @@ cython_debug/
 
 # VS Code
 .vscode/
+
+# Manim render cache (final GIFs in docs/assets are committed)
+docs/animations/media/

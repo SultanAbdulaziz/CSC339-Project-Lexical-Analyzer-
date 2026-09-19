@@ -6,14 +6,20 @@ import {
   highlightSource, tokenLegend, colorFor, isDark,
 } from '../util.js';
 
+const SOURCE_STORAGE_KEY = 'lexical-analyzer:source';
+
 export class ScanTab {
   constructor({ container, getLexer, isBuilt }) {
     this.container = container;
     this.getLexer = getLexer;
     this.isBuilt = isBuilt;
-    this.source = DEFAULT_PROGRAM;
+    this.source = localStorage.getItem(SOURCE_STORAGE_KEY) ?? DEFAULT_PROGRAM;
     this.lastResult = null;
+    this.lastElapsed = 0;
     this.render();
+    document.addEventListener('themechange', () => {
+      if (this.lastResult) this._renderResult(this.lastResult, this.lastElapsed);
+    });
   }
 
   setBuilt(built) {
@@ -37,7 +43,7 @@ export class ScanTab {
         </div>
 
         <div id="scan-needs-build" class="hidden p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-sm text-amber-800 dark:text-amber-300">
-          Build the automata first — go to the <strong>Tokens</strong> tab and click <em>Build Automata</em>.
+          Build the automata first. Go to the <strong>Tokens</strong> tab and click <em>Build Automata</em>.
         </div>
 
         <!-- Editor + output grid -->
@@ -87,18 +93,20 @@ export class ScanTab {
     this.container.querySelector('#source-editor').value = this.source;
     this.container.querySelector('#source-editor').addEventListener('input', e => {
       this.source = e.target.value;
+      localStorage.setItem(SOURCE_STORAGE_KEY, this.source);
     });
 
     this.container.querySelector('#reset-source-btn').addEventListener('click', () => {
       this.source = DEFAULT_PROGRAM;
+      localStorage.setItem(SOURCE_STORAGE_KEY, this.source);
       this.container.querySelector('#source-editor').value = this.source;
     });
 
-    this.container.querySelector('#scan-btn').addEventListener('click', () => this._runScan());
+    this.container.querySelector('#scan-btn').addEventListener('click', () => this.runScan());
     this.setBuilt(this.isBuilt);
   }
 
-  async _runScan() {
+  async runScan() {
     if (!this.isBuilt) return;
     const lexer = this.getLexer();
     if (!lexer) return;
@@ -112,6 +120,7 @@ export class ScanTab {
       const result = await lexer.scan(this.source);
       const elapsed = performance.now() - t0;
       this.lastResult = result;
+      this.lastElapsed = elapsed;
       this._renderResult(result, elapsed);
     } catch (err) {
       toast('Scan failed: ' + err.message, 'error');
